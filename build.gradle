@@ -2,6 +2,8 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.node-gradle.node' version '7.0.1'
+
 }
 
 group = 'us.homelab-core.ui.example'
@@ -19,6 +21,9 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -26,3 +31,40 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+
+node {
+	version = '22.16.0' // Node.js version
+	npmVersion = '10.9.2' // npm version
+	download = true // Automatically download Node.js
+	workDir = layout.buildDirectory.dir('nodejs').get().asFile
+	npmWorkDir = layout.buildDirectory.dir('npm').get().asFile
+}
+
+tasks.register('npmInstallDeps', NpmTask) {
+//	dependsOn npmSetup
+	args = ['install']
+	inputs.files('src/main/webapp/package.json', 'src/main/webapp/package-lock.json')
+	outputs.dir('node_modules')
+}
+
+tasks.register('npmBuild', NpmTask) {
+	dependsOn npmInstallDeps
+	args = ['run', 'build']
+	inputs.dir('src')
+	inputs.files('angular.json', 'tsconfig.json', 'package.json')
+	outputs.dir("${project.projectDir}/dist")
+}
+
+tasks.register('npmTest', NpmTask) {
+	dependsOn npmInstallDeps
+	args = ['test']
+}
+
+tasks.register('npmLint', NpmTask) {
+	dependsOn npmInstallDeps
+	args = ['run', 'lint']
+}
+
+check.dependsOn npmTest, npmLint
+build.dependsOn npmBuild
