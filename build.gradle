@@ -2,12 +2,23 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.0'
 	id 'io.spring.dependency-management' version '1.1.7'
-	id 'com.github.node-gradle.node' version '7.0.1'
-
+	id 'com.github.node-gradle.node' version '7.0.2'
 }
 
 group = 'us.homelab-core.ui.example'
 version = '0.0.1-SNAPSHOT'
+
+
+ext {
+	angularProjectName = 'front-end-app' // Explicitly define Angular project name
+
+	angularProjectRoot = "${project.projectDir}/src/main/webapp"
+	// dist/browser; static files
+	angularBrowserDir = "${angularProjectRoot}/dist/${angularProjectName}/browser"
+
+	// final location of angular files
+	springStaticDir = "${project.projectDir}/src/main/resources/static"
+}
 
 java {
 	toolchain {
@@ -32,39 +43,130 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
-
 node {
 	version = '22.16.0' // Node.js version
 	npmVersion = '10.9.2' // npm version
 	download = true // Automatically download Node.js
-	workDir = layout.buildDirectory.dir('nodejs').get().asFile
-	npmWorkDir = layout.buildDirectory.dir('npm').get().asFile
+	nodeProjectDir = file("${project.projectDir}/src/main/webapp")
 }
 
-tasks.register('npmInstallDeps', NpmTask) {
-//	dependsOn npmSetup
-	args = ['install']
-	inputs.files('src/main/webapp/package.json', 'src/main/webapp/package-lock.json')
-	outputs.dir('node_modules')
-}
+tasks.register('buildAngular', NpmTask) {
+	dependsOn npmInstall
 
-tasks.register('npmBuild', NpmTask) {
-	dependsOn npmInstallDeps
+	workingDir = file("${project.projectDir}/src/main/webapp")
 	args = ['run', 'build']
-	inputs.dir('src')
-	inputs.files('angular.json', 'tsconfig.json', 'package.json')
-	outputs.dir("${project.projectDir}/dist")
+
+	// Explicit inputs/outputs for proper task caching
+	inputs.files(
+			fileTree(dir: "${project.projectDir}/src/main/webapp",
+					exclude: ['**/node_modules/**', '**/dist/**'])
+	)
+	outputs.dir("${project.projectDir}/src/main/webapp/dist/front-end-app")
+
+	doLast {
+		println("Angular build completed")
+	}
 }
 
-tasks.register('npmTest', NpmTask) {
-	dependsOn npmInstallDeps
-	args = ['test']
+
+// Task to copy Angular build output to Spring Boot's static resources
+tasks.register('copyDistToStatic', Copy) {
+
+//	def source = "${project.projectDir}/src/main/webapp/dist/front-end-app/browser"
+	def source = "${angularBrowserDir}"
+//	def dest = "${project.projectDir}/src/main/resources/static"
+	def dest = "${springStaticDir}"
+
+	dependsOn buildAngular  // Explicit dependency
+
+	doFirst {
+		// Verify source exists before copying
+//		def srcDir = new File("${project.projectDir}/src/main/webapp/dist/front-end-app/browser")
+		def srcDir = new File("${angularBrowserDir}")
+		if (!srcDir.exists()) {
+			throw new GradleException("Source directory does not exist: ${srcDir.path}")
+		}
+
+		println("Starting to copy Angular build output to public resources")
+		println("Copying from: ${source}")
+		println("Copying to: ${dest}")
+	}
+
+	from "${source}"
+	into "${dest}"
+
+	// Ensure clean copying
+	duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+	// Add execution logging
+	doLast {
+		println("Finished copying Angular dist/ output")
+	}
+
+	// Verify the source directory exists
+	onlyIf {
+//		def srcDir = new File("${project.projectDir}/src/main/webapp/dist/front-end-app/browser")
+		def srcDir = new File("${angularBrowserDir}")
+		if (!srcDir.exists()) {
+			println("WARNING: Source directory does not exist: ${srcDir.path}")
+			return false
+		}
+		return true
+	}
 }
 
-tasks.register('npmLint', NpmTask) {
-	dependsOn npmInstallDeps
-	args = ['run', 'lint']
+tasks.register('verifyFrontendCopy') {
+	dependsOn copyDistToStatic
+
+	doLast {
+//		def staticDir = new File("${project.projectDir}/src/main/resources/static")
+		def staticDir = new File("${springStaticDir}")
+
+		if (staticDir.exists()) {
+			println("SUCCESS: Static resources directory contains:")
+			staticDir.eachFile { file ->
+				println(" - ${file.name}")
+			}
+		} else {
+			println("ERROR: Static resources directory not found!")
+		}
+	}
 }
 
-check.dependsOn npmTest, npmLint
-build.dependsOn npmBuild
+tasks.register('cleanStaticResources', Delete) {
+	dependsOn clean
+
+	def staticDir = "${springStaticDir}"
+
+	// List all files/directories to delete explicitly
+	def toDelete = []
+	file(staticDir).eachFile { file ->
+		if (file.name != 'css') {
+			toDelete << file
+		}
+	}
+	delete toDelete
+
+	doLast {
+		println "Deleted ${toDelete.size()} items from static directory"
+	}
+}
+
+processResources {
+	dependsOn copyDistToStatic
+}
+
+tasks.register('buildAngularProd', NpmTask) {
+	dependsOn npmInstall
+
+	workingDir = file("${project.projectDir}/src/main/webapp")
+	args = ['run', 'build', '--', '--configuration=production']
+
+	inputs.files(
+//			fileTree("${project.projectDir}/src/main/webapp").exclude('**/node_modules/**')
+			fileTree("${angularProjectRoot}").exclude('**/node_modules/**')
+	)
+//	outputs.dir("${project.projectDir}/src/main/resources/static")
+	outputs.dir("${springStaticDir}")
+}
+

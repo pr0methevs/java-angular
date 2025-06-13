@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: front-end-app
+
+
+  web:
+    resources:
+      static-locations:
+        - "classpath:/public/browser/"
+        - "classpath:/static/"

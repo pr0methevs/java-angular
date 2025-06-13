@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Angular project root
+src/main/resources/static/*
+!src/main/resources/static/css/
