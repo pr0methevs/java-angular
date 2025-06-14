@@ -170,3 +170,6 @@ tasks.register('buildAngularProd', NpmTask) {
 	outputs.dir("${springStaticDir}")
 }
 
+tasks.named('jar') {
+    enabled = false
+}
