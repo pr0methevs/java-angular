@@ -23,10 +23,10 @@ jobs:
     - name: ls build/libs
       run: ls -la build/libs
 
-  test:
+  # test:
 
   publish:
     runs-on: ubuntu-latest
-
+    steps:
       - name: Publish to Maven Central
         run: ./gradlew publish --no-daemon
