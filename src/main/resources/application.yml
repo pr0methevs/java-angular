@@ -8,3 +8,6 @@ spring:
       static-locations:
         - "classpath:/public/browser/"
         - "classpath:/static/"
+
+server:
+  port: 8081
