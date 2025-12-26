@@ -2,6 +2,12 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish build artifact?'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -27,6 +33,7 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
+    if: ${{ inputs.publish == true }}
     steps:
       - name: Publish to Maven Central
         run: ./gradlew publish --no-daemon
